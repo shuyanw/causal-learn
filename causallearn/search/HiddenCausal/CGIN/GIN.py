@@ -47,6 +47,7 @@ def GIN(data):
         dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
         for i in x_set:
             if min_dep_score[i] > dep_statistic:
+                print(x_set,dep_statistic,min_dep_score[i])
                 min_dep_score[i] = dep_statistic
                 min_cluster[i] = x_set
     for i in v_labels:
