@@ -6,6 +6,7 @@
 '''
 
 from collections import deque
+
 from itertools import combinations
 
 import numpy as np
@@ -34,51 +35,61 @@ def GIN(data):
         causal order
     '''
     v_labels = list(range(data.shape[1]))
+    #print(v_labels)
     v_set = set(v_labels)
     cov = np.cov(data.T)
 
     # Step 1: Finding Causal Clusters
-    cluster_list = []
-    min_cluster = {i: set() for i in v_set}
-    min_dep_score = {i: 1e9 for i in v_set}
-    for (x1, x2) in combinations(v_set, 2):
-        x_set = {x1, x2}
-        z_set = v_set - x_set
-        dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
-        for i in x_set:
-            if min_dep_score[i] > dep_statistic:
-                print(x_set,dep_statistic,min_dep_score[i])
-                min_dep_score[i] = dep_statistic
-                min_cluster[i] = x_set
-    for i in v_labels:
-        cluster_list.append(list(min_cluster[i]))
+    cluster_list = {}
+    clusters_list = []
+    #min_cluster = {i: set() for i in v_set}
+    #min_dep_score = {i: 1e9 for i in v_set}
 
-    cluster_list = merge_overlaping_cluster(cluster_list)
+    for n in range(len(v_labels)):
+        if len(v_set)<n:
+            break
+        cluster_list[n] = []
+        clustered_set = set()
+        for c in combinations(v_set, n):
+            x_set = set(c)
+            z_set = set(v_labels) - x_set
+            dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
+            if dep_statistic < 0.05+1e-7:
+                cluster_list[n].append(list(x_set))
+                clustered_set = clustered_set.union(x_set)
+        v_set = v_set - clustered_set
+        merged_cluster_list = merge_overlaping_cluster(cluster_list[n])
+        cluster_list[n] = merged_cluster_list
+        clusters_list = clusters_list + merged_cluster_list
+
 
     # Step 2: Learning the Causal Order of Latent Variables
     K = []
-    while (len(cluster_list) != 0):
-        root = find_root(data, cov, cluster_list, K)
+    while (len(clusters_list) != 0):
+        root = find_root(data, cov, clusters_list, K)
         K.append(root)
-        cluster_list.remove(root)
+        clusters_list.remove(root)
 
     latent_id = 1
     l_nodes = []
     G = GeneralGraph([])
-    for cluster in K:
-        l_node = GraphNode(f"L{latent_id}")
-        l_node.set_node_type(NodeType.LATENT)
-        l_nodes.append(l_node)
-        G.add_node(l_node)
-        for l in l_nodes:
-            if l != l_node:
-                G.add_directed_edge(l, l_node)
-        for o in cluster:
-            o_node = GraphNode(f"X{o + 1}")
-            G.add_node(o_node)
-            G.add_directed_edge(l_node, o_node)
-        latent_id += 1
-
+    for n in cluster_list.keys():
+        latents = []
+        for i in range(n):
+                l_node = GraphNode(f"L{latent_id}")
+                l_node.set_node_type(NodeType.LATENT)
+                latents.append(l_node)
+                G.add_node(l_node)
+                for l in l_nodes:
+                    G.add_directed_edge(l, l_node)
+                latent_id += 1
+        l_nodes = l_nodes + latents
+        for cluster in cluster_list[n]:
+            for o in cluster:
+                o_node = GraphNode(f"X{o + 1}")
+                G.add_node(o_node)
+                for la in latents:
+                    G.add_directed_edge(la, o_node)
     return G, K
 
 
@@ -97,14 +108,20 @@ def cal_dep_for_gin(data, cov, X, Z):
     -------
     sta : test statistic
     '''
+
     cov_m = cov[np.ix_(Z, X)]
+    #cov_m = np.ndarray([[1]])
+    #print(cov)
+    #print(X,Z)
+    #print(cov_m)
     _, _, v = np.linalg.svd(cov_m)
     omega = v.T[:, -1]
     e_xz = np.dot(omega, data[:, X].T)
+    #print(omega,X)
 
     sta = 0
     for i in Z:
-        sta += hsic_test_gamma(e_xz, data[:, i])[0]
+        sta += hsic_test_gamma(e_xz, data[:, i])[1]
     sta /= len(Z)
     return sta
 
