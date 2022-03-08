@@ -151,7 +151,7 @@ def find_root(data, cov, clusters, K):
     '''
 
     v_labels = list(range(data.shape[1]))
-    # print(v_labels)
+    #print(v_labels)
     v_set = set(v_labels)
 
     for ind_i, i in enumerate(clusters):
@@ -177,6 +177,7 @@ def find_root(data, cov, clusters, K):
                 ancestor[ind_j].append(ind_i)
             else:
                 ancestor[ind_i].append(ind_j)
+
 
 
 
