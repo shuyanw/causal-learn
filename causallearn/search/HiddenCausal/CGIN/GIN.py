@@ -5,7 +5,7 @@
     From DMIRLab: https://dmir.gdut.edu.cn/
 '''
 
-from collections import deque
+from collections import deque,defaultdict
 
 from itertools import combinations
 
@@ -15,6 +15,14 @@ from causallearn.graph.GeneralGraph import GeneralGraph
 from causallearn.graph.GraphNode import GraphNode
 from causallearn.graph.NodeType import NodeType
 from causallearn.search.FCMBased.lingam.hsic import hsic_test_gamma
+
+
+
+cluster_list = {}
+clusters_list = []
+latent_dict = {}
+ancestor = defaultdict(list)
+notsure = defaultdict(list)
 
 
 def GIN(data):
@@ -40,8 +48,7 @@ def GIN(data):
     cov = np.cov(data.T)
 
     # Step 1: Finding Causal Clusters
-    cluster_list = {}
-    clusters_list = []
+
     #min_cluster = {i: set() for i in v_set}
     #min_dep_score = {i: 1e9 for i in v_set}
 
@@ -60,21 +67,23 @@ def GIN(data):
         v_set = v_set - clustered_set
         merged_cluster_list = merge_overlaping_cluster(cluster_list[n])
         cluster_list[n] = merged_cluster_list
+        for i in range(len(clusters_list), len(clusters_list)+len(merged_cluster_list)):
+            latent_dict[i] = n
         clusters_list = clusters_list + merged_cluster_list
+        print(latent_dict,clusters_list)
+
 
 
     # Step 2: Learning the Causal Order of Latent Variables
     K = []
-    while (len(clusters_list) != 0):
-        root = find_root(data, cov, clusters_list, K)
-        K.append(root)
-        clusters_list.remove(root)
+    find_root(data, cov, clusters_list, K)
 
     latent_id = 1
     l_nodes = []
     G = GeneralGraph([])
-    for n in cluster_list.keys():
+    for ind, cluster in enumerate(clusters_list):
         latents = []
+        n = latent_dict[ind]
         for i in range(n):
                 l_node = GraphNode(f"L{latent_id}")
                 l_node.set_node_type(NodeType.LATENT)
@@ -84,12 +93,11 @@ def GIN(data):
                     G.add_directed_edge(l, l_node)
                 latent_id += 1
         l_nodes = l_nodes + latents
-        for cluster in cluster_list[n]:
-            for o in cluster:
-                o_node = GraphNode(f"X{o + 1}")
-                G.add_node(o_node)
-                for la in latents:
-                    G.add_directed_edge(la, o_node)
+        for o in cluster:
+            o_node = GraphNode(f"X{o + 1}")
+            G.add_node(o_node)
+            for la in latents:
+                G.add_directed_edge(la, o_node)
     return G, K
 
 
@@ -141,30 +149,35 @@ def find_root(data, cov, clusters, K):
     -------
     root : latent root cause
     '''
-    if len(clusters) == 1:
-        return clusters[0]
-    root = clusters[0]
-    dep_statistic_score = 1e30
-    for i in clusters:
-        for j in clusters:
-            if i == j:
-                continue
-            X = [i[0], j[0]]
-            Z = []
-            for k in range(1, len(i)):
-                Z.append(i[k])
 
-            if K:
-                for k in K:
-                    X.append(k[0])
-                    Z.append(k[1])
+    v_labels = list(range(data.shape[1]))
+    # print(v_labels)
+    v_set = set(v_labels)
 
-            dep_statistic = cal_dep_for_gin(data, cov, X, Z)
-            if dep_statistic < dep_statistic_score:
-                dep_statistic_score = dep_statistic
-                root = i
+    for ind_i, i in enumerate(clusters):
+        for ind_j in range(ind_i+1, len(clusters)):
+            #left direction
+            j = clusters[ind_j]
+            num_latent = latent_dict[ind_i]
+            X = i[:num_latent]+j[0]
+            #Z = []
+            #for k in range(1, len(i)):
+            #Z.append(i[k])
+            Z = i[num_latent:]
+            dep_statistic_left = cal_dep_for_gin(data, cov, X, Z)
+            # right direction
+            num_latent = latent_dict[ind_j]
+            X = j[:num_latent] + i[0]
+            Z = j[num_latent:]
+            dep_statistic_right = cal_dep_for_gin(data, cov, X, Z)
+            if dep_statistic_left > 0.05+1e-7 and dep_statistic_right > 0.05+1e-7:
+                notsure[ind_i].append(ind_j)
+                notsure[ind_j].append(ind_i)
+            elif dep_statistic_left < 0.05+1e-7:
+                ancestor[ind_j].append(ind_i)
+            else:
+                ancestor[ind_i].append(ind_j)
 
-    return root
 
 
 def _get_all_elements(S):
