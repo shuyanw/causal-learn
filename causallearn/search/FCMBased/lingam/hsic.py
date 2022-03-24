@@ -118,6 +118,7 @@ def hsic_test_gamma(X, Y, bw_method='mdbs'):
 
         * ``mdbs`` : Median distance between samples.
         * ``scott`` : Scott's Rule of Thumb.
+
         * ``silverman`` : Silverman's Rule of Thumb.
 
     Returns

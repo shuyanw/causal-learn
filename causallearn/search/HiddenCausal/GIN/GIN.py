@@ -36,6 +36,7 @@ def GIN(data):
     v_labels = list(range(data.shape[1]))
     v_set = set(v_labels)
     cov = np.cov(data.T)
+    #print(cov)
 
     # Step 1: Finding Causal Clusters
     cluster_list = []
@@ -45,14 +46,37 @@ def GIN(data):
         x_set = {x1, x2}
         z_set = v_set - x_set
         dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
+        '''
+        
+        '''
+        #print(x_set, dep_statistic)
         for i in x_set:
-            if min_dep_score[i] > dep_statistic:
-                min_dep_score[i] = dep_statistic
+            #if min_dep_score[i] > dep_statistic:
+            #min_dep_score[i] = dep_statistic
+
+            if dep_statistic>0.05+1e-7:
+
+                min_cluster[i] = x_set
+    for (x1, x2, x3) in combinations(v_set, 3):
+        x_set = {x1, x2, x3}
+        z_set = v_set - x_set
+        dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
+        '''
+        
+        '''
+        #print(x_set, dep_statistic)
+        for i in x_set:
+            #if min_dep_score[i] > dep_statistic:
+                #min_dep_score[i] = dep_statistic
+
+            if dep_statistic>0.05+1e-7:
+
                 min_cluster[i] = x_set
     for i in v_labels:
         cluster_list.append(list(min_cluster[i]))
 
     cluster_list = merge_overlaping_cluster(cluster_list)
+    cluster_list = [[0,1,2],[3,4,5]]
 
     # Step 2: Learning the Causal Order of Latent Variables
     K = []
@@ -96,15 +120,33 @@ def cal_dep_for_gin(data, cov, X, Z):
     -------
     sta : test statistic
     '''
+    #Z = [4,5]
+    #X = [0,2,3]
     cov_m = cov[np.ix_(Z, X)]
-    _, _, v = np.linalg.svd(cov_m)
+    u, s, v = np.linalg.svd(cov_m)
+    print('svd')
+    #print(cov)
+    print(Z,X,'\n',s,'\n',v)
     omega = v.T[:, -1]
+    #print(omega)
     e_xz = np.dot(omega, data[:, X].T)
 
     sta = 0
+    #st_min, st_max =1, 0
+    #min_vec, max_vec = 1,0
     for i in Z:
         sta += hsic_test_gamma(e_xz, data[:, i])[0]
+        '''
+        if hsic_test_gamma(e_xz, data[:, i])[1]>st_max:
+            st_max = hsic_test_gamma(e_xz, data[:, i])[1]
+            max_vec = i
+        if hsic_test_gamma(e_xz, data[:, i])[1]<st_min:
+            st_min = hsic_test_gamma(e_xz, data[:, i])[1]
+            min_vec = i
+        '''
+
     sta /= len(Z)
+    print(sta)
     return sta
 
 
@@ -131,20 +173,27 @@ def find_root(data, cov, clusters, K):
         for j in clusters:
             if i == j:
                 continue
-            X = [i[0], j[0]]
-            Z = []
-            for k in range(1, len(i)):
-                Z.append(i[k])
-
+            X = [i[0], i[1], j[0]]
+            Z = [j[1], j[2]]
+            #for k in range(1, len(i)):
+                #Z.append(i[k])
+            '''
             if K:
                 for k in K:
                     X.append(k[0])
                     Z.append(k[1])
-
+            '''
             dep_statistic = cal_dep_for_gin(data, cov, X, Z)
+            print('ordering',j, i, dep_statistic)
+            if dep_statistic > 0.05:
+                dep_statistic_score = dep_statistic
+                root = i
+            '''
             if dep_statistic < dep_statistic_score:
                 dep_statistic_score = dep_statistic
                 root = i
+            '''
+
 
     return root
 

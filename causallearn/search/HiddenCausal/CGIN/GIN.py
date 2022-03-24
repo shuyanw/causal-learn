@@ -22,8 +22,10 @@ cluster_list = {}
 clusters_list = []
 latent_dict = {}
 ancestor = defaultdict(list)
+descendant = defaultdict(list)
 notsure = defaultdict(list)
-
+norelation = defaultdict(list)
+finding_causal_order = False
 
 def GIN(data):
     '''
@@ -61,7 +63,7 @@ def GIN(data):
             x_set = set(c)
             z_set = set(v_labels) - x_set
             dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
-            if dep_statistic < 0.05+1e-7:
+            if dep_statistic > 0.1:
                 cluster_list[n].append(list(x_set))
                 clustered_set = clustered_set.union(x_set)
         v_set = v_set - clustered_set
@@ -128,10 +130,21 @@ def cal_dep_for_gin(data, cov, X, Z):
     #print(omega,X)
 
     sta = 0
+    st_min, st_max =1, 0
+    min_vec, max_vec = 1,0
     for i in Z:
         sta += hsic_test_gamma(e_xz, data[:, i])[1]
-    sta /= len(Z)
-    return sta
+        if hsic_test_gamma(e_xz, data[:, i])[1]>st_max:
+            st_max = hsic_test_gamma(e_xz, data[:, i])[1]
+            max_vec = i
+        if hsic_test_gamma(e_xz, data[:, i])[1]<st_min:
+            st_min = hsic_test_gamma(e_xz, data[:, i])[1]
+            min_vec = i
+    #sta /= len(Z)
+    if finding_causal_order:
+        return st_max
+
+    return st_min
 
 
 def find_root(data, cov, clusters, K):
@@ -149,7 +162,7 @@ def find_root(data, cov, clusters, K):
     -------
     root : latent root cause
     '''
-
+    finding_causal_order = True
     v_labels = list(range(data.shape[1]))
     #print(v_labels)
     v_set = set(v_labels)
@@ -170,14 +183,45 @@ def find_root(data, cov, clusters, K):
             X = j[:num_latent] + i[0]
             Z = j[num_latent:]
             dep_statistic_right = cal_dep_for_gin(data, cov, X, Z)
-            if dep_statistic_left > 0.05+1e-7 and dep_statistic_right > 0.05+1e-7:
+            if dep_statistic_left < 0.05+1e-7 and dep_statistic_right < 0.05+1e-7:
                 notsure[ind_i].append(ind_j)
                 notsure[ind_j].append(ind_i)
-            elif dep_statistic_left < 0.05+1e-7:
+            elif dep_statistic_left > 0.1+1e-7 and dep_statistic_right > 0.1+1e-7:
+                norelation[ind_i].append(ind_j)
+                norelation[ind_j].append(ind_i)
+            elif dep_statistic_left > 0.05+1e-7:
                 ancestor[ind_j].append(ind_i)
+                descendant[ind_i].append(ind_j)
             else:
                 ancestor[ind_i].append(ind_j)
+                descendant[ind_j].append(ind_i)
 
+def cc_or_cycles():
+    causalorder = []
+    circle = []
+    cc = []
+    processed = set()
+    for cluster in ancestor.keys():
+        causalorder.append(cluster,len(ancestor[cluster]))
+    causalorder = sorted(causalorder, key=lambda c: c[1])
+    for i in notsure.keys():
+        for j in notsure[i]:
+            if j in processed:
+                continue
+            arrow_in = set(ancestor[i])
+            arrow_in2 = set(norelation[j])
+            if len (arrow_in & arrow_in2) >0:
+                cc.append([i,j])
+            else:
+                arrow_in3 = set(ancestor[j])
+                if len(arrow_in & arrow_in3) >0:
+                    cc.append([i,j])
+                for c in arrow_in - arrow_in3:
+                    if c not in arrow_in2:
+                        circle.append([i,j])
+        processed.add(i)
+
+    return causalorder, cc, circle
 
 
 
