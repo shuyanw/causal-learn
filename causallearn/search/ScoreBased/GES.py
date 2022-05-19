@@ -1,4 +1,5 @@
-from causallearn.graph.Endpoint import Endpoint
+from typing import Optional
+from causallearn.score.LocalScoreFunctionClass import LocalScoreClass
 from causallearn.graph.GeneralGraph import GeneralGraph
 from causallearn.graph.GraphNode import GraphNode
 from causallearn.utils.DAG2CPDAG import dag2cpdag
@@ -6,8 +7,9 @@ from causallearn.utils.GESUtils import *
 from causallearn.utils.PDAG2DAG import pdag2dag
 
 
-def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
-    '''
+def ges(X: ndarray, score_func: str = 'local_score_BIC', maxP: Optional[float] = None,
+        parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
     Perform greedy equivalence search (GES) algorithm
 
     Parameters
@@ -31,7 +33,7 @@ def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
     Record['G_step1']: learned graph at each step in the forward step
     Record['G_step2']: learned graph at each step in the backward step
     Record['score']: the score of the learned graph
-    '''
+    """
 
     if X.shape[0] < X.shape[1]:
         warnings.warn("The number of features is much larger than the sample size!")
@@ -44,12 +46,14 @@ def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
         if maxP is None:
             maxP = X.shape[1] / 2  # maximum number of parents
         N = X.shape[1]  # number of variables
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_cv_general, parameters=parameters)
 
     elif score_func == 'local_score_marginal_general':  # negative marginal likelihood based on regression in RKHS
         parameters = {}
         if maxP is None:
             maxP = X.shape[1] / 2  # maximum number of parents
         N = X.shape[1]  # number of variables
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_marginal_general, parameters=parameters)
 
     elif score_func == 'local_score_CV_multi':  # k-fold negative cross validated likelihood based on regression in RKHS
         # for data with multi-variate dimensions
@@ -60,6 +64,7 @@ def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
         if maxP is None:
             maxP = len(parameters['dlabel']) / 2
         N = len(parameters['dlabel'])
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_cv_multi, parameters=parameters)
 
     elif score_func == 'local_score_marginal_multi':  # negative marginal likelihood based on regression in RKHS
         # for data with multi-variate dimensions
@@ -70,19 +75,23 @@ def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
         if maxP is None:
             maxP = len(parameters['dlabel']) / 2
         N = len(parameters['dlabel'])
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_marginal_multi, parameters=parameters)
 
     elif score_func == 'local_score_BIC':  # Greedy equivalence search with BIC score
         if maxP is None:
             maxP = X.shape[1] / 2
         N = X.shape[1]  # number of variables
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_BIC, parameters=None)
 
     elif score_func == 'local_score_BDeu':  # Greedy equivalence search with BDeu score
         if maxP is None:
             maxP = X.shape[1] / 2
         N = X.shape[1]  # number of variables
+        localScoreClass = LocalScoreClass(data=X, local_score_fun=local_score_BDeu, parameters=None)
 
     else:
         raise Exception('Unknown function!')
+    score_func = localScoreClass
 
     node_names = [("x%d" % i) for i in range(N)]
     nodes = []
@@ -227,9 +236,9 @@ def ges(X, score_func='local_score_BIC', maxP=None, parameters=None):
                                 min_chscore = chscore
                                 min_desc = desc
 
-        if (len(min_desc) != 0):
+        if len(min_desc) != 0:
             score_new = score + min_chscore
-            if (score - score_new <= 0):
+            if score - score_new <= 0:
                 break
             G = delete(G, min_desc[0], min_desc[1], min_desc[2])
             update2.append([min_desc[0], min_desc[1], min_desc[2]])

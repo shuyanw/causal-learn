@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from itertools import combinations
+from typing import List
 
 import networkx as nx
 import numpy as np
@@ -8,15 +9,16 @@ from causallearn.graph.Edge import Edge
 from causallearn.graph.Endpoint import Endpoint
 from causallearn.graph.GeneralGraph import GeneralGraph
 from causallearn.graph.Graph import Graph
+from causallearn.graph.Node import Node
 from causallearn.utils.GraphUtils import GraphUtils
 
 
 # Represents a directed acyclic graph--that is, a graph containing only
 # directed edges, with no cycles--using a matrix. Variables are permitted to be either measured
 # or latent, with at most one edge per node pair, and no edges to self.
-class Dag(Graph):
+class Dag(GeneralGraph):
 
-    def __init__(self, nodes):
+    def __init__(self, nodes: List[Node]):
 
         # for node in nodes:
         #     if not isinstance(node, type(GraphNode)):
@@ -139,6 +141,10 @@ class Dag(Graph):
 
         self.graph = graph
         self.dpath = dpath
+
+        self.adjust_dpath(self.num_vars - 1, self.num_vars - 1)
+
+        return True
 
     # Removes all nodes (and therefore all edges) from the graph.
     def clear(self):
@@ -551,6 +557,8 @@ class Dag(Graph):
         self.graph[j, i] = 0
         self.graph[i, j] = 0
 
+        self.reconstitute_dpath(self.get_graph_edges())
+
     # Removes the edge connecting the given two nodes, provided there is exactly one such edge.
     def remove_connecting_edge(self, node1, node2):
 
@@ -595,6 +603,10 @@ class Dag(Graph):
         node_map = self.node_map
         node_map.pop(node)
         self.node_map = node_map
+
+        self.num_vars -= 1
+
+        self.reconstitute_dpath(self.get_graph_edges())
 
     # Iterates through the list and removes any permissible nodes found.  The
     # order in which nodes are removed is the order in which they are presented

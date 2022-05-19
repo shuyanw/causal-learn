@@ -26,6 +26,8 @@ Usage
     # cg.to_nx_graph()
     # cg.draw_nx_graph(skel=False)
 
+Visualization using pydot is recommended. If specific label names are needed, please refer to this `usage example <https://github.com/cmu-phil/causal-learn/blob/e4e73f8b58510a3cd5a9125ba50c0ac62a425ef3/tests/TestGraphVisualization.py#L106>`_ (e.g., GraphUtils.to_pydot(cg.G, labels=["A", "B", "C"]).
+
 Parameters
 -------------------
 **data**: numpy.ndarray, shape (n_samples, n_features). Data, where n_samples is the number of samples
@@ -59,7 +61,7 @@ and n_features is the number of features.
 
 **correction_name**. Missing value correction if using missing-value PC. Default: 'MV_Crtn_Fisher_Z'
 
-**background_knowledge**: class BackgroundKnowledge. Add prior edges according to assigned causal connections. Default: None. Currently it does not support missing-value PC.
+**background_knowledge**: class BackgroundKnowledge. Add prior edges according to assigned causal connections. Default: None.
 For detailed usage, please kindly refer to its `usage example <https://github.com/cmu-phil/causal-learn/blob/main/tests/TestBackgroundKnowledge.py>`_.
 
 **verbose**: True iff verbose output should be printed. Default: False.
