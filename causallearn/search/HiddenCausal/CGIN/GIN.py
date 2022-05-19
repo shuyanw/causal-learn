@@ -61,7 +61,7 @@ def GIN(data):
             x_set = set(c)
             z_set = set(v_labels) - x_set
             dep_statistic = cal_dep_for_gin(data, cov, list(x_set), list(z_set))
-            if dep_statistic < 0.05+1e-7:
+            if dep_statistic > 0.05+1e-7:
                 cluster_list[n].append(list(x_set))
                 clustered_set = clustered_set.union(x_set)
         v_set = v_set - clustered_set
@@ -129,8 +129,10 @@ def cal_dep_for_gin(data, cov, X, Z):
 
     sta = 0
     for i in Z:
-        sta += hsic_test_gamma(e_xz, data[:, i])[1]
-    sta /= len(Z)
+        sta = max(sta,hsic_test_gamma(e_xz, data[:, i])[1])
+    #sta /= len(Z)
+    #calculate
+
     return sta
 
 
@@ -170,13 +172,22 @@ def find_root(data, cov, clusters, K):
             X = j[:num_latent] + i[0]
             Z = j[num_latent:]
             dep_statistic_right = cal_dep_for_gin(data, cov, X, Z)
-            if dep_statistic_left > 0.05+1e-7 and dep_statistic_right > 0.05+1e-7:
+            if dep_statistic_left < 0.05+1e-7 and dep_statistic_right < 0.05+1e-7:
                 notsure[ind_i].append(ind_j)
                 notsure[ind_j].append(ind_i)
-            elif dep_statistic_left < 0.05+1e-7:
+            elif dep_statistic_left > 0.05+1e-7:
                 ancestor[ind_j].append(ind_i)
             else:
                 ancestor[ind_i].append(ind_j)
+
+def circle_or_latent():
+    #the not_sure relation is symmetric
+    causal_order = []
+    for cluster in ancestor.keys():
+        causal_order.append((cluster,len(ancestor[cluster])))
+    causal_order = sorted(causal_order, key = lambda order: order[1])
+
+
 
 
 

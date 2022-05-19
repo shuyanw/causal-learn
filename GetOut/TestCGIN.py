@@ -33,6 +33,7 @@ class TestGIN(unittest.TestCase):
         plt.show()
 
         data = np.array([X1, X2, X3, X4, X5, X6, X7, X8]).T
+        #print(data.shape)
         data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
         g, k = GIN(data)
         print(g, k)
