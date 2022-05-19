@@ -49,13 +49,21 @@ such as TestPC.py and TestGES.py.
 
 For the implemented modules, such as (conditional) independent test methods, we provide unit tests for the convenience of developing your own methods.
 
+Benchmarks
+^^^^^^^^^^^^
+For the convenience of our community, `CMU-CLeaR <https://www.cmu.edu/dietrich/causality>`_ group maintains a list of benchmark datasets including real-world scenarios and various learning tasks. Please refer to the following links:
+
+- `https://github.com/cmu-phil/example-causal-datasets <https://github.com/cmu-phil/example-causal-datasets>`_ (maintained by Joseph Ramsey)
+- `https://www.cmu.edu/dietrich/causality/causal-learn <https://www.cmu.edu/dietrich/causality/causal-learn>`_
+
+Please feel free to let us know if you have any recommendation regarding causal datasets with high-quality. We are grateful for any effort that benefits the development of causality community.
 
 Contributors
 ^^^^^^^^^^^^
 
 **Team Leaders**: Kun Zhang, Joseph Ramsey, Mingming Gong, Ruichu Cai, Shohei Shimizu, Peter Spirtes, Clark Glymour
 
-**Coordinators**: Biwei Huang, Yujia Zheng, Wei Chen
+**Coordinators**: Yujia Zheng, Biwei Huang, Wei Chen
 
 **Developers**:
 

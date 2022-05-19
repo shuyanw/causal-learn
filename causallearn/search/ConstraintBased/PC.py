@@ -1,37 +1,45 @@
+from __future__ import annotations
+
 import time
 import warnings
 from itertools import combinations, permutations
+from typing import Dict, List, Tuple
 
 import networkx as nx
-import numpy as np
+from numpy import ndarray
 
 from causallearn.graph.GraphClass import CausalGraph
+from causallearn.utils.PCUtils.BackgroundKnowledge import BackgroundKnowledge
 from causallearn.utils.cit import *
 from causallearn.utils.PCUtils import Helper, Meek, SkeletonDiscovery, UCSepset
 from causallearn.utils.PCUtils.BackgroundKnowledgeOrientUtils import \
     orient_by_background_knowledge
 
 
-def pc(data, alpha=0.05, indep_test=fisherz, stable=True, uc_rule=0, uc_priority=2, mvpc=False,
-       correction_name='MV_Crtn_Fisher_Z',
-       background_knowledge=None, verbose=False, show_progress=True):
+def pc(data: ndarray, alpha=0.05, indep_test=fisherz, stable: bool = True, uc_rule: int = 0, uc_priority: int = 2,
+       mvpc: bool = False, correction_name: str = 'MV_Crtn_Fisher_Z',
+       background_knowledge: BackgroundKnowledge | None = None, verbose: bool = False, show_progress: bool = True):
     if data.shape[0] < data.shape[1]:
         warnings.warn("The number of features is much larger than the sample size!")
 
-    if mvpc:
+    if mvpc:  # missing value PC
         if indep_test == fisherz:
             indep_test = mv_fisherz
         return mvpc_alg(data=data, alpha=alpha, indep_test=indep_test, correction_name=correction_name, stable=stable,
-                        uc_rule=uc_rule, uc_priority=uc_priority, verbose=verbose, show_progress=show_progress)
+                        uc_rule=uc_rule, uc_priority=uc_priority, background_knowledge=background_knowledge,
+                        verbose=verbose,
+                        show_progress=show_progress)
     else:
         return pc_alg(data=data, alpha=alpha, indep_test=indep_test, stable=stable, uc_rule=uc_rule,
                       uc_priority=uc_priority, background_knowledge=background_knowledge, verbose=verbose,
                       show_progress=show_progress)
 
 
-def pc_alg(data, alpha, indep_test, stable, uc_rule, uc_priority, background_knowledge=None, verbose=False,
-           show_progress=True):
-    '''
+def pc_alg(data: ndarray, alpha: float, indep_test, stable: bool, uc_rule: int, uc_priority: int,
+           background_knowledge: BackgroundKnowledge | None = None,
+           verbose: bool = False,
+           show_progress: bool = True) -> CausalGraph:
+    """
     Perform Peter-Clark (PC) algorithm for causal discovery
 
     Parameters
@@ -66,7 +74,7 @@ def pc_alg(data, alpha, indep_test, stable, uc_rule, uc_priority, background_kno
                     cg.G.graph[i,j] = cg.G.graph[j,i] = -1 indicates i --- j,
                     cg.G.graph[i,j] = cg.G.graph[j,i] = 1 indicates i <-> j.
 
-    '''
+    """
 
     start = time.time()
     cg_1 = SkeletonDiscovery.skeleton_discovery(data, alpha, indep_test, stable,
@@ -97,6 +105,8 @@ def pc_alg(data, alpha, indep_test, stable, uc_rule, uc_priority, background_kno
             cg_2 = UCSepset.definite_maxp(cg_1, alpha, background_knowledge=background_knowledge)
         cg_before = Meek.definite_meek(cg_2, background_knowledge=background_knowledge)
         cg = Meek.meek(cg_before, background_knowledge=background_knowledge)
+    else:
+        raise ValueError("uc_rule should be in [0, 1, 2]")
     end = time.time()
 
     cg.PC_elapsed = end - start
@@ -104,8 +114,11 @@ def pc_alg(data, alpha, indep_test, stable, uc_rule, uc_priority, background_kno
     return cg
 
 
-def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_priority, verbose, show_progress):
-    '''
+def mvpc_alg(data: ndarray, alpha: float, indep_test, correction_name: str, stable: bool, uc_rule: int,
+             uc_priority: int, background_knowledge: BackgroundKnowledge | None = None,
+             verbose: bool = False,
+             show_progress: bool = True) -> CausalGraph:
+    """
     Perform missing value Peter-Clark (PC) algorithm for causal discovery
 
     Parameters
@@ -134,6 +147,7 @@ def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_prior
            2. prioritize existing colliders
            3. prioritize stronger colliders
            4. prioritize stronger* colliers
+    background_knowledge: background knowledge
     verbose : True iff verbose output should be printed.
     show_progress : True iff the algorithm progress should be show in console.
 
@@ -143,7 +157,7 @@ def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_prior
                     cg.G.graph[i,j] = cg.G.graph[j,i] = -1 indicates i --- j,
                     cg.G.graph[i,j] = cg.G.graph[j,i] = 1 indicates i <-> j.
 
-    '''
+    """
 
     start = time.time()
 
@@ -153,8 +167,12 @@ def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_prior
 
     ## Step 2:
     ## a) Run PC algorithm with the 1st step skeleton;
-    cg_pre = SkeletonDiscovery.skeleton_discovery(data, alpha, indep_test, stable, verbose=verbose,
-                                                  show_progress=show_progress)
+    cg_pre = SkeletonDiscovery.skeleton_discovery(data, alpha, indep_test, stable,
+                                                  background_knowledge=background_knowledge,
+                                                  verbose=verbose, show_progress=show_progress)
+    if background_knowledge is not None:
+        orient_by_background_knowledge(cg_pre, background_knowledge)
+
     cg_pre.to_nx_skeleton()
     # print('Finish skeleton search with test-wise deletion.')
 
@@ -162,28 +180,33 @@ def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_prior
     cg_corr = skeleton_correction(data, alpha, correction_name, cg_pre, prt_m, stable)
     # print('Finish missingness correction.')
 
+    if background_knowledge is not None:
+        orient_by_background_knowledge(cg_corr, background_knowledge)
+
     ## Step 3: Orient the edges
     if uc_rule == 0:
         if uc_priority != -1:
-            cg_2 = UCSepset.uc_sepset(cg_corr, uc_priority)
+            cg_2 = UCSepset.uc_sepset(cg_corr, uc_priority, background_knowledge=background_knowledge)
         else:
-            cg_2 = UCSepset.uc_sepset(cg_corr)
-        cg = Meek.meek(cg_2)
+            cg_2 = UCSepset.uc_sepset(cg_corr, background_knowledge=background_knowledge)
+        cg = Meek.meek(cg_2, background_knowledge=background_knowledge)
 
     elif uc_rule == 1:
         if uc_priority != -1:
-            cg_2 = UCSepset.maxp(cg_corr, uc_priority)
+            cg_2 = UCSepset.maxp(cg_corr, uc_priority, background_knowledge=background_knowledge)
         else:
-            cg_2 = UCSepset.maxp(cg_corr)
-        cg = Meek.meek(cg_2)
+            cg_2 = UCSepset.maxp(cg_corr, background_knowledge=background_knowledge)
+        cg = Meek.meek(cg_2, background_knowledge=background_knowledge)
 
     elif uc_rule == 2:
         if uc_priority != -1:
-            cg_2 = UCSepset.definite_maxp(cg_corr, alpha, uc_priority)
+            cg_2 = UCSepset.definite_maxp(cg_corr, alpha, uc_priority, background_knowledge=background_knowledge)
         else:
-            cg_2 = UCSepset.definite_maxp(cg_corr, alpha)
-        cg_before = Meek.definite_meek(cg_2)
-        cg = Meek.meek(cg_before)
+            cg_2 = UCSepset.definite_maxp(cg_corr, alpha, background_knowledge=background_knowledge)
+        cg_before = Meek.definite_meek(cg_2, background_knowledge=background_knowledge)
+        cg = Meek.meek(cg_before, background_knowledge=background_knowledge)
+    else:
+        raise ValueError("uc_rule should be in [0, 1, 2]")
     end = time.time()
 
     cg.PC_elapsed = end - start
@@ -193,7 +216,7 @@ def mvpc_alg(data, alpha, indep_test, correction_name, stable, uc_rule, uc_prior
 
 #######################################################################################################################
 ## *********** Functions for Step 1 ***********
-def get_prt_mpairs(data, alpha, indep_test, stable=True):
+def get_prt_mpairs(data: ndarray, alpha: float, indep_test, stable: bool = True) -> Dict[str, list]:
     """
     Detect the parents of missingness indicators
     If a missingness indicator has no parent, it will not be included in the result
@@ -223,12 +246,12 @@ def get_prt_mpairs(data, alpha, indep_test, stable=True):
     return prt_m
 
 
-def isempty(prt_r):
+def isempty(prt_r) -> bool:
     """Test whether the parent of a missingness indicator is empty"""
     return len(prt_r) == 0
 
 
-def get_mindx(data):
+def get_mindx(data: ndarray) -> List[int]:
     """Detect the parents of missingness indicators
     :param data: data set (numpy ndarray)
     :return:
@@ -243,7 +266,7 @@ def get_mindx(data):
     return m_indx
 
 
-def detect_parent(r, data_, alpha, indep_test, stable=True):
+def detect_parent(r: int, data_: ndarray, alpha: float, indep_test, stable: bool = True) -> ndarray:
     """Detect the parents of a missingness indicator
     :param r: the missingness indicator
     :param data_: data set (numpy ndarray)
@@ -273,7 +296,7 @@ def detect_parent(r, data_, alpha, indep_test, stable=True):
     ## If r is not a missingness indicator, return [].
     data[:, r] = np.isnan(data[:, r]).astype(float)  # True is missing; false is not missing
     if sum(data[:, r]) == 0 or sum(data[:, r]) == len(data[:, r]):
-        return []
+        return np.empty(0)
     ## *********** End ***********
 
     no_of_var = data.shape[1]
@@ -337,7 +360,7 @@ def detect_parent(r, data_, alpha, indep_test, stable=True):
     return prt
 
 
-def get_parent(r, cg_skel_adj):
+def get_parent(r: int, cg_skel_adj: ndarray) -> ndarray:
     """Get the neighbors of missingness indicators which are the parents
     :param r: the missingness indicator index
     :param cg_skel_adj: adjacancy matrix of a causal skeleton
@@ -353,7 +376,8 @@ def get_parent(r, cg_skel_adj):
 ## *********** END ***********
 #######################################################################################################################
 
-def skeleton_correction(data, alpha, test_with_correction_name, init_cg, prt_m, stable=True):
+def skeleton_correction(data: ndarray, alpha: float, test_with_correction_name: str, init_cg: CausalGraph, prt_m: dict,
+                        stable: bool = True) -> CausalGraph:
     """Perform skeleton discovery
     :param data: data set (numpy ndarray)
     :param alpha: desired significance level in (0, 1) (float)
@@ -427,11 +451,11 @@ def skeleton_correction(data, alpha, test_with_correction_name, init_cg, prt_m, 
 
 # *********** Evaluation util ***********
 
-def get_adjacancy_matrix(g):
+def get_adjacancy_matrix(g: CausalGraph) -> ndarray:
     return nx.to_numpy_array(g.nx_graph).astype(int)
 
 
-def matrix_diff(cg1, cg2):
+def matrix_diff(cg1: CausalGraph, cg2: CausalGraph) -> (float, List[Tuple[int, int]]):
     adj1 = get_adjacancy_matrix(cg1)
     adj2 = get_adjacancy_matrix(cg2)
     count = 0
